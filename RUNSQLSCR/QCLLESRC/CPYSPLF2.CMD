@@ -1,0 +1,20 @@
+000100
+000101150213             CMD        PROMPT('Copy Spooled File from an OUTQ')
+000102150210
+000103150213             PARM       KWD(SRCMBR) TYPE(*CHAR) LEN(10) MIN(1) +
+000104150213                          PROMPT('Source Member')
+000105150213
+000109150213             PARM       KWD(OUTF) TYPE(OUTFTYP) MIN(1) +
+000110150213                          PROMPT('Output File')
+000111150213
+000112150213             PARM       KWD(OUTQ) TYPE(OUTQTYP) MIN(1) +
+000113150213                          PROMPT('Output Queue')
+000114150213
+000120150213 OUTQTYP:    QUAL       TYPE(*NAME) LEN(10) MIN(1) EXPR(*YES)
+000121150210             QUAL       TYPE(*NAME) LEN(10) SPCVAL((*LIBL) +
+000122150213                          (*CURLIB)) MIN(1) PROMPT('Library')
+000123150213
+000124150213 OUTFTYP:    QUAL       TYPE(*NAME) LEN(10) MIN(1) EXPR(*YES)
+000125150213             QUAL       TYPE(*NAME) LEN(10) SPCVAL((*LIBL) +
+000126150213                          (*CURLIB)) MIN(1) PROMPT('Library')
+000127150210

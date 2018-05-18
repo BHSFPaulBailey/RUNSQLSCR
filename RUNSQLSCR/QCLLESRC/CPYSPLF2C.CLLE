@@ -1,0 +1,283 @@
+000001150213/*'=================================================================PJB*/
+000002150213/*' Find the last spooled file (on a given OUTQ) and                PJB*/
+000003150213/*' copy to a physical file. PJB 2015-02-12                         PJB*/
+000100150213/*'=================================================================   */
+000101150213/*' Based on code found at search400.techtarget.com:                PJB*/
+000102150213/*'CHANGE USERDATA ON ALL SPLF IN A SPECIFIC OUTQ AND MOVE TO          */
+000103150213/*'ANOTHER OUTPUT QUEUE                                                */
+000104150213/*'-----------------------------------------------------------------   */
+000105150213/*'Date       | Author       | Description                             */
+000106150213/*'-----------+--------------+--------------------------------------   */
+000107150213/*'02.04.2004 | J. SAUVAGEOT | Creation                                */
+000108150213/*'12.02.2015 | P. Bailey    | Changed for purposes above           PJB*/
+000109150213/*'===========+==============+======================================   */
+000110150213/*'                                                                    */
+000111150213/*' Pass in a specific OUTQ, a SPLF name and an OUTFILE and the *LAST  */
+000112150213/*' spooled file with that name on the specified outq will be copied   */
+000113150213/*' to the outfile.                                                    */
+000114150213/*'                                                                    */
+000115150213/*' This is to solve issue where current job is writing spooled files  */
+000116150213/*' to another OUTQ (and thus another job) and it isn't easy to find   */
+000117150213/*' the job with the spooled file for the CPYSPLF command.             */
+000118150213/*' RDi compiles, joblogs and so on all write to a different OUTQ.     */
+000119150213/*'                                                                    */
+000120150213/*'===========+==============+======================================   */
+000121150213             PGM        PARM(&P_MBR &OUTF &OUTQ)
+000123150212
+000124150213             DCL        VAR(&OUTQ) TYPE(*CHAR) LEN(20)
+000125150213             DCL        VAR(&OUTQ_FROM) TYPE(*CHAR) LEN(10)
+000126150213             DCL        VAR(&OUTQL_FROM) TYPE(*CHAR) LEN(10)
+000127150213             DCL        VAR(&OUTF) TYPE(*CHAR) LEN(20)
+000128150213             DCL        VAR(&P_LIB) TYPE(*CHAR) LEN(10)
+000129150213             DCL        VAR(&P_FILE) TYPE(*CHAR) LEN(10)
+000130150213             DCL        VAR(&P_MBR) TYPE(*CHAR) LEN(10)
+000131150212
+000132150213             DCL        VAR(&FILE)      TYPE(*CHAR) LEN(10)
+000133150213             DCL        VAR(&JOBNAME)   TYPE(*CHAR) LEN(10)
+000134150213             DCL        VAR(&USER)      TYPE(*CHAR) LEN(10)
+000135150213             DCL        VAR(&JOBNUMBER) TYPE(*CHAR) LEN(6)
+000136150213             DCL        VAR(&FILENR)    TYPE(*DEC) LEN(4)
+000137150213             DCL        VAR(&FILETX)    TYPE(*CHAR) LEN(4)
+000138150212
+000139150213             DCL        VAR(&SV_FILE)      TYPE(*CHAR) LEN(10)
+000140150213             DCL        VAR(&SV_JOBNAME)   TYPE(*CHAR) LEN(10)
+000141150213             DCL        VAR(&SV_USER)      TYPE(*CHAR) LEN(10)
+000142150213             DCL        VAR(&SV_JOBNUM) TYPE(*CHAR) LEN(6)
+000143150213             DCL        VAR(&SV_FILENR)    TYPE(*DEC) LEN(4) VALUE(0)
+000144150213             DCL        VAR(&CPYFAIL) TYPE(*CHAR) LEN(1) VALUE('0')
+000145150212
+000146150213             DCL        VAR(&MSGID) TYPE(*CHAR) LEN(7)
+000147150213             DCL        VAR(&MSGF) TYPE(*CHAR) LEN(10)
+000148150213             DCL        VAR(&MSGFLIB) TYPE(*CHAR) LEN(10)
+000149150213             DCL        VAR(&MSGDTALN) TYPE(*DEC) LEN(9 0)
+000150150213             DCL        VAR(&MSGDTA) TYPE(*CHAR) LEN(80)
+000151150213             DCL        VAR(&NO_ERROR) TYPE(*CHAR) LEN(4) +
+000152150212                          VALUE(X'00000000')
+000153150212
+000154150213/* Declares for QUSCRTUS - Create User Space */
+000155150213             DCL        VAR(&QCUS_NAME) TYPE(*CHAR) LEN(20) +
+000156150212                          VALUE('UPD_UDTA  QTEMP     ')
+000157150213             DCL        VAR(&QCUS_EXATR) TYPE(*CHAR) LEN(10) +
+000158150212                          VALUE('USRSPC    ')
+000159150213/* Maximum number of SPLF the User Space will contain */
+000160150213             DCL        VAR(&QCUS_SIZE) TYPE(*CHAR) LEN(4) +
+000161150212                          VALUE(X'00010000')
+000162150213             DCL        VAR(&QCUS_INIT) TYPE(*CHAR) LEN(1) VALUE(X'00')
+000163150213             DCL        VAR(&QCUS_PUBA) TYPE(*CHAR) LEN(10) +
+000164150212                          VALUE('*ALL      ')
+000165150213             DCL        VAR(&QCUS_TEXT) TYPE(*CHAR) LEN(50)
+000166150213             DCL        VAR(&QCUS_REPL) TYPE(*CHAR) LEN(10) +
+000167150212                          VALUE('*YES      ')
+000168150213             DCL        VAR(&QCUS_DOMN) TYPE(*CHAR) LEN(10) +
+000169150212                          VALUE('*DEFAULT  ')
+000170150212
+000171150213/* Declares for QUSLSPL - List Spooled Files */
+000172150213             DCL        VAR(&QLSF_NAME) TYPE(*CHAR) LEN(20) +
+000173150212                          VALUE('UPD_UDTA  QTEMP     ')
+000174150213             DCL        VAR(&QLSF_FOMT) TYPE(*CHAR) LEN(8) +
+000175150212                          VALUE('SPLF0100')
+000176150213             DCL        VAR(&QLSF_USER) TYPE(*CHAR) LEN(10)
+000177150213             DCL        VAR(&QLSF_OUTQ) TYPE(*CHAR) LEN(20)
+000178150213             DCL        VAR(&QLSF_FORM) TYPE(*CHAR) LEN(10)
+000179150213             DCL        VAR(&QLSF_USRD) TYPE(*CHAR) LEN(10)
+000180150212
+000181150213/* Declares for QUSRTVUS - Retrieve User Space */
+000183150213             DCL        VAR(&QRUS_NAME) TYPE(*CHAR) LEN(20) +
+000184150212                          VALUE('UPD_UDTA  QTEMP     ')
+000185150213             DCL        VAR(&QRUS_STRT) TYPE(*CHAR) LEN(4)
+000186150213             DCL        VAR(&QRUS_LENG) TYPE(*CHAR) LEN(4)
+000187150213             DCL        VAR(&QRUS_HEAD) TYPE(*CHAR) LEN(16)
+000188150213             DCL        VAR(&QRUS_LINE) TYPE(*CHAR) LEN(82)
+000189150213             DCL        VAR(&INT_OFFSET) TYPE(*DEC) LEN(9 0)
+000190150213             DCL        VAR(&INT_NUMBER) TYPE(*DEC) LEN(9 0)
+000191150213             DCL        VAR(&INT_SIZE) TYPE(*DEC) LEN(9 0)
+000192150213             DCL        VAR(&INT_POSIT) TYPE(*DEC) LEN(9 0)
+000193150212
+000194150213/* Variables QUSRSPLA - Get Spooled File Attributes */
+000196150213             DCL        VAR(&QGSA_RCV) TYPE(*CHAR) LEN(3772)
+000197150213             DCL        VAR(&QGSA_RCVLN) TYPE(*CHAR) LEN(4) +
+000198150212                          VALUE(X'00000EBC')
+000199150213             DCL        VAR(&QGSA_FOMT) TYPE(*CHAR) LEN(8) +
+000200150212                          VALUE('SPLA0200')
+000201150213             DCL        VAR(&QGSA_JOB) TYPE(*CHAR) LEN(26) +
+000202150212                          VALUE('*INT                      ')
+000203150213             DCL        VAR(&QGSA_IJOB) TYPE(*CHAR) LEN(16)
+000204150213             DCL        VAR(&QGSA_ISPL) TYPE(*CHAR) LEN(16)
+000205150213             DCL        VAR(&QGSA_SPLF) TYPE(*CHAR) LEN(10) +
+000206150212                          VALUE('*INT      ')
+000207150213             DCL        VAR(&QGSA_SPLNB) TYPE(*CHAR) LEN(4) +
+000208150212                          VALUE(X'00000000')
+000209150212
+000210150213/* Declares for QUSDLTUS - Delete User Space */
+000212150213             DCL        VAR(&QDUS_NAME) TYPE(*CHAR) LEN(20) +
+000213150212                          VALUE('UPD_UDTA  QTEMP     ')
+000214150212
+000215150213/* Declares for QERRCD - Error Code */
+000217150213             DCL        VAR(&QERRCD) TYPE(*CHAR) LEN(96)
+000218150213
+000219150213/* Working library */
+000220150213             DCL        VAR(&APPLIB) TYPE(*CHAR) LEN(10) +
+000221150213                          VALUE('RUNSQLSCR')
+000222150213
+000243160420
+000244150213             ADDLIBLE   LIB(&APPLIB) POSITION(*LAST)
+000245150213             MONMSG     MSGID(CPF2103)
+000246150213
+000247150213             CHGVAR     VAR(&OUTQ_FROM) VALUE(%SST(&OUTQ 1 10))
+000248150213             CHGVAR     VAR(&OUTQL_FROM) VALUE(%SST(&OUTQ 11 10))
+000249150213             CHGVAR     VAR(&P_FILE) VALUE(%SST(&OUTF 1 10))
+000250150213             CHGVAR     VAR(&P_LIB) VALUE(%SST(&OUTF 11 10))
+000251160420
+000260150213/* Create Userspace */
+000261150213             CHGVAR     VAR(%SST(&QERRCD 1 8)) +
+000262150212                          VALUE(X'0000006000000000')
+000263150213             CALL       PGM(QUSCRTUS) PARM(&QCUS_NAME &QCUS_EXATR +
+000264150212                          &QCUS_SIZE &QCUS_INIT &QCUS_PUBA +
+000265150212                          &QCUS_TEXT &QCUS_REPL &QERRCD &QCUS_DOMN)
+000266150213             IF         COND(%SST(&QERRCD 5 4) *NE &NO_ERROR) +
+000267150212                          THEN(GOTO CMDLBL(ERROR_API))
+000268150212
+000269150213/* List all Spooled Files from a given Output Queue */
+000270150213             CHGVAR     VAR(&QLSF_USER) VALUE('*ALL')
+000271150213             CHGVAR     VAR(&QLSF_OUTQ) VALUE(&OUTQ_FROM *CAT +
+000272150212                          &OUTQL_FROM)
+000273150213             CHGVAR     VAR(&QLSF_FORM) VALUE('*ALL')
+000274150213             CHGVAR     VAR(&QLSF_USRD) VALUE('*ALL')
+000275150213             CHGVAR     VAR(%SST(&QERRCD 1 8)) +
+000276150212                          VALUE(X'0000006000000000')
+000277150213             CALL       PGM(QUSLSPL) PARM(&QLSF_NAME &QLSF_FOMT +
+000278150212                          &QLSF_USER &QLSF_OUTQ &QLSF_FORM +
+000279150212                          &QLSF_USRD &QERRCD)
+000280150213             IF         COND(%SST(&QERRCD 5 4) *NE &NO_ERROR) +
+000281150212                          THEN(GOTO CMDLBL(ERROR_API))
+000282150212
+000283150213/* Read Headerdata from Userspace */
+000284150213             CHGVAR     VAR(%BIN(&QRUS_STRT)) VALUE(125)
+000285150213             CHGVAR     VAR(%BIN(&QRUS_LENG)) VALUE(16)
+000286150213             CHGVAR     VAR(%SST(&QERRCD 1 8)) +
+000287150212                          VALUE(X'0000006000000000')
+000288150213             CALL       PGM(QUSRTVUS) PARM(&QRUS_NAME &QRUS_STRT +
+000289150212                          &QRUS_LENG &QRUS_HEAD &QERRCD)
+000290150213             IF         COND(%SST(&QERRCD 5 4) *NE &NO_ERROR) +
+000291150212                          THEN(GOTO CMDLBL(ERROR_API))
+000292150212
+000293150213             CHGVAR     VAR(&INT_OFFSET) VALUE(%BIN(&QRUS_HEAD 1 4))
+000294150213             CHGVAR     VAR(&INT_NUMBER) VALUE(%BIN(&QRUS_HEAD 9 4))
+000295150213             CHGVAR     VAR(&INT_SIZE) VALUE(%BIN(&QRUS_HEAD 13 4))
+000296150212
+000297150213/* Loop through the Userspace */
+000298150213             CHGVAR     VAR(&INT_POSIT) VALUE(0)
+000299150213 LOOP_SPACE: CHGVAR     VAR(&INT_POSIT) VALUE(&INT_POSIT + 1)
+000300150213             IF         COND(&INT_POSIT *GT &INT_NUMBER) THEN(GOTO +
+000301150212                          CMDLBL(FINAL_STEP))
+000302150212
+000303150213/* Read next Userspace detail line */
+000304150213             CHGVAR     VAR(%BIN(&QRUS_STRT)) VALUE(&INT_OFFSET + +
+000305150212                          ((&INT_POSIT - 1) * &INT_SIZE) + 1)
+000306150213             CHGVAR     VAR(%BIN(&QRUS_LENG)) VALUE(82)
+000307150213             CHGVAR     VAR(%SST(&QERRCD 1 8)) +
+000308150212                          VALUE(X'0000006000000000')
+000309150213             CALL       PGM(QUSRTVUS) PARM(&QRUS_NAME &QRUS_STRT +
+000310150212                          &QRUS_LENG &QRUS_LINE &QERRCD)
+000311150213             IF         COND(%SST(&QERRCD 5 4) *NE &NO_ERROR) +
+000312150212                          THEN(GOTO CMDLBL(ERROR_API))
+000313150212
+000314150213/* Get Spooled File Attributes */
+000315150213             CHGVAR     VAR(&QGSA_IJOB) VALUE(%SST(&QRUS_LINE 51 16))
+000316150213             CHGVAR     VAR(&QGSA_ISPL) VALUE(%SST(&QRUS_LINE 67 16))
+000317150213             CHGVAR     VAR(%SST(&QERRCD 1 8)) +
+000318150212                          VALUE(X'0000006000000000')
+000319150213             CALL       PGM(QUSRSPLA) PARM(&QGSA_RCV &QGSA_RCVLN +
+000320150212                          &QGSA_FOMT &QGSA_JOB &QGSA_IJOB +
+000321150212                          &QGSA_ISPL &QGSA_SPLF &QGSA_SPLNB &QERRCD)
+000322150213             IF         COND(%SST(&QERRCD 5 4) *NE &NO_ERROR) +
+000323150212                          THEN(GOTO CMDLBL(ERROR_API))
+000324150212
+000325150213             CHGVAR     VAR(&JOBNAME)   VALUE(%SST(&QGSA_RCV 49 10))
+000326150213             CHGVAR     VAR(&FILE)      VALUE(%SST(&QGSA_RCV 75 10))
+000327150213             CHGVAR     VAR(&USER)      VALUE(%SST(&QGSA_RCV 59 10))
+000328150213             CHGVAR     VAR(&JOBNUMBER) VALUE(%SST(&QGSA_RCV 69 10))
+000329150213             CHGVAR     VAR(&FILENR)    VALUE(%BIN(&QGSA_RCV 85 4))
+000330150213             CHGVAR     VAR(&FILETX)    VALUE(&FILENR)
+000331150212
+000332160420             /* SNDPGMMSG  MSG('Found #' *TCAT &FILETX *BCAT &FILE) */
+000333150212
+000334150213             IF COND((&FILE *EQ &P_MBR) *AND (&SV_FILENR *LT &FILENR)) THEN(DO)
+000335150213                /* save the spooled file details if SPLF file number higher */
+000336150213                CHGVAR     VAR(&SV_JOBNAME) VALUE(&JOBNAME)
+000337150213                CHGVAR     VAR(&SV_FILE)    VALUE(&FILE)
+000338150213                CHGVAR     VAR(&SV_USER)    VALUE(&USER)
+000339150213                CHGVAR     VAR(&SV_JOBNUM)  VALUE(&JOBNUMBER)
+000340150213                CHGVAR     VAR(&SV_FILENR)  VALUE(&FILENR)
+000341150213                CHGVAR     VAR(&FILETX)     VALUE(&FILENR)
+000342160420                SNDPGMMSG  MSG('Saving SPLF #' *TCAT &FILETX *BCAT +
+000343160420                             &SV_FILE)
+000344150213             ENDDO
+000345150212
+000346150212
+000347150213/* Read next Spooled File from User Space */
+000348150213             GOTO       CMDLBL(LOOP_SPACE)
+000349150212
+000350150213
+000351150213/* Copy the last found spooled file into the given file member */
+000352150213 FINAL_STEP: IF COND(&SV_FILE *EQ &P_MBR) THEN(DO)
+000353150213                CHGVAR     VAR(&CPYFAIL) VALUE('2') /* Found a +
+000354150212                             spooled file */
+000355150213                CPYSPLF    FILE(&SV_FILE) TOFILE(&P_LIB/&P_FILE) +
+000356150212                             JOB(&SV_JOBNUM/&SV_USER/&SV_JOBNAME) +
+000357150212                             SPLNBR(&SV_FILENR) TOMBR(&P_MBR)
+000358150213                MONMSG     MSGID(CPF0000) EXEC(DO)
+000359150213                   RCVMSG     MSGTYPE(*LAST) RMV(*NO) +
+000360150212                                MSGDTA(&MSGDTA) MSGID(&MSGID) +
+000361150212                                MSGF(&MSGF) MSGFLIB(&MSGFLIB)
+000362150213                   CHGVAR     VAR(&CPYFAIL) VALUE('1') /* Couldn't +
+000363150212                                copy the spooled file */
+000364150213                ENDDO
+000365150213             ENDDO
+000366150212
+000367150213/* Delete Userspace  */
+000368150213 END_SPACE:  CHGVAR     VAR(%SST(&QERRCD 1 8)) +
+000369150212                          VALUE(X'0000006000000000')
+000370150213             CALL       PGM(QUSDLTUS) PARM(&QDUS_NAME &QERRCD)
+000371150213             IF         COND(%SST(&QERRCD 5 4) *NE &NO_ERROR) +
+000372150212                          THEN(GOTO CMDLBL(ERROR_API))
+000373150213/* JUMP */
+000374150213             GOTO       CMDLBL(EXITPGM)
+000375150212
+000376150212
+000378160420 EXITPGM:    IF         COND(&CPYFAIL *EQ '1') THEN(DO)
+000379160420                SNDPGMMSG  MSG('Cpy2Splf2 failed to copy')
+000380150213                /* Resend error message for caller to see */
+000381150213                SNDPGMMSG  MSGID(&MSGID) MSGF(&MSGFLIB/&MSGF) +
+000382150212                             MSGDTA(&MSGDTA)
+000383150213             ENDDO
+000384150213
+000385150213/* JUMP */
+000386160420             GOTO       CMDLBL(ENDPROC)
+000387150212
+000388150213
+000389150213/* API-Error */
+000390150213 ERROR_API:  CHGVAR     VAR(&MSGID) VALUE(%SST(&QERRCD 9 7))
+000391150213             CHGVAR     VAR(&MSGDTALN) VALUE(%BIN(&QERRCD 5 4))
+000392150213             CHGVAR     VAR(&MSGDTALN) VALUE(&MSGDTALN - 16)
+000393150213             CHGVAR     VAR(&MSGDTA) VALUE(%SST(&QERRCD 17 &MSGDTALN))
+000394150213             SNDPGMMSG  MSGID(&MSGID) MSGF(QCPFMSG) MSGDTA(&MSGDTA) +
+000395150212                          MSGTYPE(*DIAG)
+000396150212
+000397150213/* Error */
+000398150213 ERROR:      SNDPGMMSG  MSGID(CPF9899) MSGF(QCPFMSG) MSGTYPE(*ESCAPE)
+000399150212
+000400160420/* Bye, bye */
+000401160420 ENDPROC:
+000402160420
+000403160420             /* Clean up on aisle six */
+000404160420             /* Do NOT remove this library in this CLLE program */
+000405160420             /* RMVLIBLE   LIB(&APPLIB)                         */
+000406160420             /* MONMSG     MSGID(CPF0000)                       */
+000407160420
+000408160420             GOTO       CMDLBL(ENDPGM)
+000409160420
+000410160420
+000428160420
+000429160420 ENDPGM:     ENDPGM
+000430150212

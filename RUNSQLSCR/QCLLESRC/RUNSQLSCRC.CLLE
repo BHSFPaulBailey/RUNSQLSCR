@@ -1,0 +1,429 @@
+000100151111 RUNSQLSCRC: PGM        PARM(&SRCFILE &SRCMBR &SRCSTMF &SCHEMA +
+000101151111                          &OPTION &EVENTFL &SEVLIMIT)
+000102150210
+000103150210             DCL        VAR(&SRCFILE) TYPE(*CHAR) LEN(20)
+000104150212             DCL        VAR(&SRCL) TYPE(*CHAR) LEN(10)
+000105150210             DCL        VAR(&SRCF) TYPE(*CHAR) LEN(10)
+000106151111             DCL        VAR(&SRCMBR) TYPE(*CHAR) LEN(10)
+000107160120             DCL        VAR(&SRCSTMF) TYPE(*CHAR) LEN(540)
+000108151111             DCL        VAR(&SCHEMA) TYPE(*CHAR) LEN(10)
+000109151111             DCL        VAR(&EVENTL) TYPE(*CHAR) LEN(10)
+000110151111             DCL        VAR(&EVENTFL) TYPE(*CHAR) LEN(10)
+000111151111             DCL        VAR(&OPTION) TYPE(*CHAR) LEN(10)
+000112150213             DCL        VAR(&SEVLIMIT) TYPE(*DEC) LEN(2 0)
+000113150213             DCL        VAR(&ADDSCHEMA) TYPE(*CHAR) LEN(1)
+000114150212             DCL        VAR(&TMPL) TYPE(*CHAR) LEN(10) +
+000115150212                          VALUE('QTEMP')
+000116150212             DCL        VAR(&TMPF) TYPE(*CHAR) LEN(10) +
+000117150212                          VALUE('TMPEVENT')
+000118150212             DCL        VAR(&DFTOUTQLIB) TYPE(*CHAR) LEN(10)
+000119150212             DCL        VAR(&DFTOUTQ) TYPE(*CHAR) LEN(10)
+000120150212             DCL        VAR(&SRCCHG) TYPE(*CHAR) LEN(13) /* +
+000121150212                          CYYMMDDHHMMSS */
+000122151111             DCL        VAR(&GOTSRC) TYPE(*CHAR) LEN(1) VALUE('N')
+000123150213
+000124150213             DCL        VAR(&MSGID) TYPE(*CHAR) LEN(7)
+000125150213             DCL        VAR(&MSGF) TYPE(*CHAR) LEN(10)
+000126150213             DCL        VAR(&MSGFLIB) TYPE(*CHAR) LEN(10)
+000127150213             DCL        VAR(&MSGDTA) TYPE(*CHAR) LEN(80)
+000128150213             DCL        VAR(&MSGF) TYPE(*CHAR) LEN(10)
+000129150213             DCL        VAR(&STMFAIL) TYPE(*CHAR) LEN(1)
+000130160120
+000131160120             DCL        VAR(&STRPOS) TYPE(*DEC) LEN(3 0) VALUE(540)
+000132160120             DCL        VAR(&STARTPOS) TYPE(*DEC) LEN(3 0) VALUE(0)
+000133160120             DCL        VAR(&DOTPOS) TYPE(*DEC) LEN(3 0) VALUE(0)
+000134160120             DCL        VAR(&ENDPOS) TYPE(*DEC) LEN(3 0) VALUE(0)
+000135160120             DCL        VAR(&GOTSTR) TYPE(*CHAR) LEN(1)
+000136150213
+000137150213             DCL        VAR(&ERRTEXT) TYPE(*CHAR) LEN(230)
+000138150213             DCL        VAR(&ERRID) TYPE(*CHAR) LEN(7)
+000139150213             DCL        VAR(&ERRSEV) TYPE(*CHAR) LEN(2)
+000140150213             DCL        VAR(&ERRTYPE) TYPE(*CHAR) LEN(1)
+000141150213             DCL        VAR(&ERRLINE) TYPE(*CHAR) LEN(6)
+000142150213             DCLF       FILE(EVFEVENT)
+000143150213
+000144150213/* Working library */
+000145150213             DCL        VAR(&APPLIB) TYPE(*CHAR) LEN(10) +
+000146150213                          VALUE('RUNSQLSCR')
+000147150213
+000148160420/* for uppercase of parameter fields */
+000149160420             DCL        VAR(&FRCB) TYPE(*CHAR) LEN(22)
+000150160420             DCL        VAR(&FRCB_REQ) TYPE(*INT) STG(*DEFINED) +
+000151160420                          LEN(4) DEFVAR(&FRCB)
+000152160420             DCL        VAR(&FRCB_CCSID) TYPE(*INT) STG(*DEFINED) +
+000153160420                          LEN(4) DEFVAR(&FRCB 5)
+000154160420             DCL        VAR(&FRCB_LOWER) TYPE(*INT) STG(*DEFINED) +
+000155160420                          LEN(4) DEFVAR(&FRCB 9)
+000156160420             DCL        VAR(&FRCB_RES) TYPE(*CHAR) STG(*DEFINED) +
+000157160420                          LEN(10) DEFVAR(&FRCB 13)
+000158160420
+000159160420             DCL        VAR(&NAME) TYPE(*CHAR) LEN(50) VALUE('test')
+000160160420             DCL        VAR(&OUTPUT) TYPE(*CHAR) LEN(50)
+000161160420             DCL        VAR(&LEN) TYPE(*INT) LEN(4) VALUE(50)
+000162160420             DCL        VAR(&QUSEC) TYPE(*CHAR) LEN(16) +
+000163160420                          VALUE(X'0000000000000000')
+000164160420
+000165160420             DCL        VAR(&RTNVAR) TYPE(*INT) LEN(4)
+000166160420
+000167160420
+000180160420
+000181150213             ADDLIBLE   LIB(&APPLIB) POSITION(*LAST)
+000182150213             MONMSG     MSGID(CPF2103)
+000185150210
+000186150212             CHGVAR     VAR(&SRCF) VALUE(%SST(&SRCFILE 1 10))
+000187150212             CHGVAR     VAR(&SRCL) VALUE(%SST(&SRCFILE 11 10))
+000188151102             IF         COND(&SRCF *EQ ' ') THEN(DO)
+000189150210             IF         COND(&SCHEMA *EQ '*SRCLIB   ') THEN(CHGVAR +
+000190150212                          VAR(&SCHEMA) VALUE(&SRCL))
+000191151102             ENDDO
+000192150213             IF         COND(&SEVLIMIT *GT 40) THEN(CHGVAR &SEVLIMIT +
+000193150213                          40)
+000194150213             IF         COND(&SEVLIMIT *LT 0) THEN(CHGVAR &SEVLIMIT +
+000195150213                          0)
+000196151102
+000197150210
+000198150212
+000199150212             /* Validate parameters */
+000200151111             IF (&SRCSTMF *NE ' ') THEN(DO)
+000201151111                CHKIN &SRCSTMF
+000202151111                MONMSG CPCA08A
+000203151111                MONMSG CPF0000 EXEC(DO)
+000204151111                   SNDPGMMSG  MSG('RUNSQLSCR: Source file' *BCAT +
+000205151111                                &SRCSTMF *BCAT 'not found') +
+000206151111                                MSGTYPE(*INFO)
+000207151111                   GOTO       CMDLBL(ENDPGM)
+000208160120                ENDDO
+000209160120                /* Get source member name */
+000210160120                CHGVAR     VAR(&GOTSTR) VALUE('N')
+000211160120                DOUNTIL    COND((&GOTSTR *EQ 'Y') *OR (&STRPOS *EQ +
+000212160120                             0))
+000213160120                   IF (%SST(&SRCSTMF &STRPOS 1) *NE ' ') THEN(DO)
+000214160120                      IF         COND(&ENDPOS *EQ 0) THEN(CHGVAR +
+000215160120                                   VAR(&ENDPOS) VALUE(&STRPOS))
+000216160120                      IF         COND(((%SST(&SRCSTMF &STRPOS 1) *EQ +
+000217160120                                   '/') *OR (%SST(&SRCSTMF &STRPOS +
+000218160120                                   1) *EQ '\')) *AND (&STARTPOS *EQ +
+000219160120                                   0)) THEN(DO)
+000220160120                         CHGVAR     VAR(&STARTPOS) VALUE(&STRPOS + 1)
+000221160120                         IF (&DOTPOS *GT &STARTPOS) THEN(DO)
+000222160120                            CHGVAR     VAR(&ENDPOS) VALUE(&DOTPOS - 1)
+000223160120                         ENDDO
+000224160120                         CHGVAR     VAR(&GOTSTR) VALUE('Y')
+000225160120                      ENDDO
+000226160120                      IF         COND((%SST(&SRCSTMF &STRPOS 1) *EQ +
+000227160120                                   '.') *AND (&DOTPOS *GE +
+000228160120                                   0) *AND (&STRPOS *GT +
+000229160120                                   &STARTPOS)) THEN(DO)
+000230160120                         CHGVAR     VAR(&DOTPOS) VALUE(&STRPOS)
+000231160120                      ENDDO
+000232160120                   ENDDO
+000233160120                   CHGVAR     VAR(&STRPOS) VALUE(&STRPOS - 1)
+000234160120                ENDDO
+000235160120                IF (&GOTSTR *EQ 'Y') THEN(DO)
+000236160120                   IF         COND(&ENDPOS *GE &STARTPOS) THEN(DO)
+000237160120                      CHGVAR     VAR(&ENDPOS) VALUE(&ENDPOS - +
+000238160120                                   &STARTPOS + 1)
+000239160120                      IF         COND(&ENDPOS *GT 10) THEN(CHGVAR +
+000240160120                                   VAR(&ENDPOS) VALUE(10))
+000241160120                      CHGVAR     VAR(&SRCMBR) VALUE(%SST(&SRCSTMF +
+000242160120                                   &STARTPOS &ENDPOS))
+000243160120                      CHGVAR     VAR(&GOTSRC) VALUE('S')
+000244160120                   ENDDO
+000245160120                ENDDO
+000246151111             ENDDO
+000247151111
+000248151111             IF         COND(&GOTSRC *EQ 'N') THEN(DO)
+000249151111                CHKOBJ     OBJ(&SRCL/&SRCF) OBJTYPE(*FILE) +
+000250151111                             MBR(&SRCMBR)
+000251151111                MONMSG     MSGID(CPF9801 CPF9815) EXEC(DO)
+000252151111                   SNDPGMMSG  MSG('RUNSQLSCR: Source member' *BCAT +
+000253151111                                &SRCL *TCAT '/' *TCAT &SRCF *BCAT +
+000254151111                                '(' *TCAT &SRCMBR *TCAT ') not +
+000255151111                                found') MSGTYPE(*INFO)
+000256151111                   GOTO       CMDLBL(ENDPGM)
+000257151111                ENDDO
+000258151111                CHGVAR     VAR(&SRCSTMF) VALUE(' ')
+000259151111                   CHGVAR     VAR(&GOTSRC) VALUE('M')
+000260151111             ENDDO
+000261151111             IF         COND(&GOTSRC *NE 'N') THEN(DO)
+000262151111                CHGVAR     VAR(&EVENTL) VALUE(&SRCL)
+000263151111                CHGVAR     VAR(&ADDSCHEMA) VALUE('1') /* SCHEMA not +
+000264151111                             added to LIBL */
+000265151111                IF         COND(&SCHEMA *NE '*NONE') THEN(DO)
+000266151111                   CHKOBJ     OBJ(&SCHEMA) OBJTYPE(*LIB)
+000267151111                   MONMSG     MSGID(CPF9801 CPF9815) EXEC(DO)
+000268151111                      SNDPGMMSG  MSG('RUNSQLSCR: Schema library' +
+000269151111                                   *BCAT &SCHEMA *BCAT 'not found') +
+000270151111                                   MSGTYPE(*INFO)
+000271151111                      GOTO       CMDLBL(ENDPGM)
+000272151111                   ENDDO
+000273150414
+000274151111                   /* Add schema if necessary */
+000275151111                   CHGVAR     VAR(&ADDSCHEMA) VALUE('0')
+000276151111                   ADDLIBLE   LIB(&SCHEMA) POSITION(*AFTER &TMPL)
+000277151111                   MONMSG     MSGID(CPF2103) EXEC(DO)
+000278151111                      CHGVAR     VAR(&ADDSCHEMA) VALUE('1')
+000279151111                   ENDDO
+000280151111                   MONMSG     MSGID(CPF0000)
+000281151111                   IF         COND(&EVENTFL *EQ '*SCHEMA   ') +
+000282151111                                THEN(DO)
+000283151111                      CHGVAR     VAR(&EVENTL) VALUE(&SCHEMA)
+000284151111                   ENDDO
+000285151111                   ELSE       CMD(DO)
+000286151111                      IF         COND(&EVENTFL *NE '*NONE     ') +
+000287151111                                   THEN(DO)
+000288151111                         CHGVAR     VAR(&EVENTL) VALUE(&EVENTFL)
+000289151111                      ENDDO
+000290151111                   ENDDO
+000291151111                ENDDO
+000292151111                ELSE       CMD(DO)
+000293151111                   IF         COND(&EVENTFL *EQ '*SCHEMA   ') +
+000294151111                                THEN(DO)
+000295151111                      IF         COND(&OPTION *EQ '*EVENTF   ') +
+000296151111                                   THEN(DO)
+000297151111                         CHGVAR     VAR(&EVENTL) VALUE('BAILEYP')
+000298151111                      ENDDO
+000299151111                   ENDDO
+000300151111                   ELSE       CMD(DO)
+000301151111                      IF         COND(&EVENTFL *EQ '*NONE     ') +
+000302151111                                   THEN(DO)
+000303151111                         CHGVAR     VAR(&EVENTL) VALUE('BAILEYP')
+000304151111                      ENDDO
+000305151111                      ELSE       CMD(DO)
+000306151111                         CHGVAR     VAR(&EVENTL) VALUE(&EVENTFL)
+000307151111                      ENDDO
+000308151111                   ENDDO
+000309151111                ENDDO
+000310151111             ENDDO
+000311150212
+000312150212
+000313150213             CHGVAR     VAR(&STMFAIL) VALUE('0')
+000314151111             IF (&GOTSRC *EQ 'M')  THEN(DO)
+000315151111                /* Run the SQL script in the source member */
+000316151111                RUNSQLSTM  SRCFILE(&SRCL/&SRCF) SRCMBR(&SRCMBR) +
+000317151111                             COMMIT(*NONE) ERRLVL(&SEVLIMIT) +
+000318151111                             DFTRDBCOL(&SCHEMA) OPTION(*LIST) +
+000319151111                             DBGVIEW(*SOURCE)
+000320151111                MONMSG     MSGID(SQL9010) EXEC(DO)
+000321151111                   /* RUNSQLSTM command failed. */
+000322151111                   RCVMSG     MSGTYPE(*LAST) RMV(*NO) +
+000323151111                                MSGDTA(&MSGDTA) MSGID(&MSGID) +
+000324151111                                MSGF(&MSGF) MSGFLIB(&MSGFLIB)
+000325151111                   CHGVAR     VAR(&STMFAIL) VALUE('1')
+000326151111                ENDDO
+000327151111                MONMSG     MSGID(CPF0000) EXEC(DO)
+000328151111                   /* RUNSQLSTM command failed for non SQL reasons. */
+000329151111                   RCVMSG     MSGTYPE(*LAST) RMV(*NO) +
+000330151111                                MSGDTA(&MSGDTA) MSGID(&MSGID) +
+000331151111                                MSGF(&MSGF) MSGFLIB(&MSGFLIB)
+000332151111                   CHGVAR     VAR(&STMFAIL) VALUE('2')
+000333151111                ENDDO
+000334151111             ENDDO
+000335151111             IF         COND(&GOTSRC *EQ 'S') THEN(DO)
+000336151111                /* Run the SQL script in the stream file */
+000337151111                RUNSQLSTM  SRCSTMF(&SRCSTMF) COMMIT(*NONE) +
+000338151111                             ERRLVL(&SEVLIMIT) DFTRDBCOL(&SCHEMA) +
+000339151111                             OPTION(*LIST) DBGVIEW(*SOURCE)
+000340151111                MONMSG     MSGID(SQL9010) EXEC(DO)
+000341151111                   /* RUNSQLSTM command failed. */
+000342151111                   RCVMSG     MSGTYPE(*LAST) RMV(*NO) +
+000343151111                                MSGDTA(&MSGDTA) MSGID(&MSGID) +
+000344151111                                MSGF(&MSGF) MSGFLIB(&MSGFLIB)
+000345151111                   CHGVAR     VAR(&STMFAIL) VALUE('1')
+000346151111                ENDDO
+000347151111                MONMSG     MSGID(CPF0000) EXEC(DO)
+000348151111                   /* RUNSQLSTM command failed for non SQL reasons. */
+000349151111                   RCVMSG     MSGTYPE(*LAST) RMV(*NO) +
+000350151111                                MSGDTA(&MSGDTA) MSGID(&MSGID) +
+000351151111                                MSGF(&MSGF) MSGFLIB(&MSGFLIB)
+000352151111                   CHGVAR     VAR(&STMFAIL) VALUE('2')
+000353151111                ENDDO
+000354151111             ENDDO
+000355150210
+000356150212
+000357150212             IF         COND(&OPTION *EQ '*EVENTF   ') THEN(DO)
+000358150212
+000359150212                /* Make certain the TMPEVENT file exists */
+000360150212 TMPCHECK:      CHKOBJ     OBJ(&TMPL/&TMPF) OBJTYPE(*FILE) +
+000361150210                             MBR(*FIRST)
+000362150210                MONMSG     MSGID(CPF9801 CPF9815) EXEC(DO)
+000363150212                   CRTPF      FILE(&TMPL/&TMPF) RCDLEN(132) +
+000364150210                                MBR(&SRCMBR) MAXMBRS(*NOMAX)
+000365150212                   GOTO       CMDLBL(CLEARED)
+000366150212                ENDDO
+000367150210
+000368150212
+000369160420/* upper case parameter */
+000370160420                CHGVAR     VAR(&NAME) VALUE(&SRCMBR)
+000371160420                CALLSUBR   SUBR(UPPER) RTNVAL(&RTNVAR)
+000372160420                CHGVAR     VAR(&SRCMBR) VALUE(&OUTPUT)
+000373150212                CHKOBJ     OBJ(&TMPL/&TMPF) OBJTYPE(*FILE) +
+000374150210                             MBR(&SRCMBR)
+000375150210                MONMSG     MSGID(CPF9801 CPF9815) EXEC(DO)
+000376150212                   ADDPFM     FILE(&TMPL/&TMPF) MBR(&SRCMBR)
+000377150212                   GOTO       CMDLBL(CLEARED)
+000378150212                ENDDO
+000379150210
+000380150212
+000381150212                CLRPFM     FILE(&TMPL/&TMPF) MBR(&SRCMBR)
+000382150212 CLEARED:       GOTO       CMDLBL(EVFCHECK)
+000383150212
+000384150212
+000385150212                /* Make certain the EVFEVENT file exists */
+000386150212 EVFCHECK:      CHKOBJ     OBJ(QGPL/EVFEVENT) OBJTYPE(*FILE) +
+000387150212                             MBR(*FIRST)
+000388150212                MONMSG     MSGID(CPF9801 CPF9815) EXEC(DO)
+000389150212                   CRTPF      FILE(QGPL/EVFEVENT) RCDLEN(300) +
+000390150212                                MBR(&SRCMBR) MAXMBRS(*NOMAX)
+000391150212                ENDDO
+000392150212
+000393150212
+000394150414                CHKOBJ     OBJ(&EVENTL/EVFEVENT) OBJTYPE(*FILE) +
+000395150212                             MBR(*FIRST)
+000396150212                MONMSG     MSGID(CPF9801 CPF9815) EXEC(DO)
+000397150212                   CRTDUPOBJ  OBJ(EVFEVENT) FROMLIB(QGPL) +
+000398150414                                OBJTYPE(*FILE) TOLIB(&EVENTL)
+000399150212                ENDDO
+000400150212
+000401150212
+000402150414                CHKOBJ     OBJ(&EVENTL/EVFEVENT) OBJTYPE(*FILE) +
+000403150212                             MBR(&SRCMBR)
+000404150212                MONMSG     MSGID(CPF9801 CPF9815) EXEC(DO)
+000405150414                   ADDPFM     FILE(&EVENTL/EVFEVENT) MBR(&SRCMBR)
+000406150212                   GOTO       CMDLBL(CLEARED2)
+000407150212                ENDDO
+000408150212
+000409150212
+000410150414                CLRPFM     FILE(&EVENTL/EVFEVENT) MBR(&SRCMBR)
+000411150212 CLEARED2:      GOTO       CMDLBL(CHKEVENTF)
+000412150212
+000413150212
+000414150212                /* Process the RUNSQLSTM spooled file output */
+000415150212 CHKEVENTF:     CPYSPLF    FILE(&SRCMBR) TOFILE(&TMPL/&TMPF) +
+000416160420                             SPLNBR(*LAST) TOMBR(&SRCMBR)
+000417150212                MONMSG     MSGID(CPF3303) EXEC(DO)
+000418160420                   IF         COND(&GOTSRC *EQ 'S') THEN(DO)
+000419160120                      SNDPGMMSG  MSG('RUNSQLSCR: Spooled file output +
+000420160120                                   for source file' *BCAT &SRCSTMF +
+000421160120                                   *BCAT 'not found') +
+000422160120                                   MSGTYPE(*INFO)
+000423160120                   ENDDO
+000424160420                   IF         COND(&GOTSRC *EQ 'M') THEN(DO)
+000425160120                      SNDPGMMSG  MSG('RUNSQLSCR: Spooled file output +
+000426160120                                   for source member' *BCAT &SRCL +
+000427160120                                   *TCAT '/' *TCAT &SRCF *BCAT '(' +
+000428160120                                   *TCAT &SRCMBR *TCAT ') not +
+000429160120                                   found') MSGTYPE(*INFO)
+000430160120                   ENDDO
+000431150212                   RTVJOBA    OUTQ(&DFTOUTQ) OUTQLIB(&DFTOUTQLIB)
+000436160420                   RUNSQLSCR/CPYSPLF2 SRCMBR(&SRCMBR) +
+000437160420                                        OUTF(&TMPL/&TMPF) +
+000438160420                                        OUTQ(&DFTOUTQLIB/&DFTOUTQ)
+000439150212                   MONMSG     MSGID(CPF0000) EXEC(DO)
+000440150212                      GOTO       CMDLBL(ENDPGM)
+000441150212                   ENDDO
+000442150212                ENDDO
+000443150212
+000444150212                OVRDBF     FILE(TMPEVENT) TOFILE(&TMPL/&TMPF) +
+000445150210                             MBR(&SRCMBR)
+000446150212
+000447160120                IF         COND(&SRCSTMF *EQ ' ') THEN(DO)
+000448160120                   RTVMBRD    FILE(&SRCL/&SRCF) MBR(&SRCMBR) +
+000449160120                                SRCCHGDATE(&SRCCHG)
+000450160120                ENDDO
+000451160120                ELSE       CMD(DO)
+000452160120                   CHGVAR     VAR(&SRCCHG) VALUE('xxx')
+000453160120                ENDDO
+000454150212
+000455150212                CALL       PGM(RUNSQLSCRR) PARM(&SRCL &SRCF &SRCMBR +
+000456160120                                                &SRCSTMF &EVENTL &SRCCHG)
+000457150212
+000458150212                /* inform RDi that there is an EVFEVENT member to display */
+000461160420                CHGDTAARA  DTAARA(*LDA) VALUE(&EVENTL *CAT &SRCMBR)
+000462150210
+000463150213                IF         COND(&STMFAIL *EQ '0') THEN(DO)
+000464160420                   SNDPGMMSG  MSG('RUNSQLSCR command successful.')
+000465150213                ENDDO
+000466150213                IF         COND(&STMFAIL *EQ '1') THEN(DO)
+000467150213                   /* Resend failure message */
+000468150213                   SNDPGMMSG  MSGID(&MSGID) MSGF(&MSGFLIB/&MSGF) +
+000469150213                                MSGDTA(&MSGDTA)
+000470150213                   /* Output all other error messages from EVFEVENT member */
+000471150213                   OVRDBF     FILE(EVFEVENT) +
+000472150414                                TOFILE(&EVENTL/EVFEVENT) MBR(&SRCMBR)
+000473150213 /*                CALL       PGM(RUNSQLSCRD) */
+000474150213 READEVF:          RCVF
+000475150213                   MONMSG     MSGID(CPF0864) EXEC(GOTO +
+000476150213                                CMDLBL(EXITLOOP))
+000477150213                   IF         COND(%SST(&EVFEVENT 1 11) +
+000478150213                                 *EQ 'ERROR      ') THEN(DO)
+000479150213
+000480150213                      CHGVAR     VAR(&ERRTYPE) VALUE(%SST(&EVFEVENT +
+000481150213                                   57 1))
+000482150213                      IF         COND((&ERRTYPE *EQ 'E') *OR +
+000483150213                                   (&ERRTYPE *EQ 'S') *OR (&ERRTYPE +
+000484150213                                   *EQ 'T')) THEN(DO)
+000485150213                         CHGVAR     VAR(&ERRLINE) +
+000486150213                                      VALUE(%SST(&EVFEVENT 20 6))
+000487150213                         CHGVAR     VAR(&ERRSEV) +
+000488150213                                      VALUE(%SST(&EVFEVENT 59 2))
+000489150213                         CHGVAR     VAR(&ERRID) VALUE(%SST(&EVFEVENT +
+000490150213                                      49 7))
+000491150213                         CHGVAR     VAR(&ERRTEXT) +
+000492150213                                      VALUE(%SST(&EVFEVENT 66 230))
+000493160420                         SNDPGMMSG  MSG('RUNSQLSCR:' *BCAT &ERRID +
+000494150213                                      *BCAT '(Sev:' *TCAT &ERRSEV +
+000495150213                                      *TCAT ' Line:' *TCAT &ERRLINE +
+000496150213                                      *TCAT ')' *BCAT &ERRTEXT)
+000497150213
+000498150213                      ENDDO
+000499150213                   ENDDO
+000500150213                   GOTO       CMDLBL(READEVF)
+000501150213
+000502150213                ENDDO
+000503150213                IF         COND(&STMFAIL *EQ '2') THEN(DO)
+000504150213                   SNDPGMMSG  MSGID(&MSGID) MSGF(&MSGFLIB/&MSGF) +
+000505150213                                MSGDTA(&MSGDTA)
+000506150213                ENDDO
+000507150213
+000508150210             ENDDO
+000509150210
+000510150210
+000511150213 EXITLOOP:   DLTOVR     FILE(*ALL) LVL(*ACTGRPDFN)
+000512150210
+000513150210
+000514150213 ENDPGM:
+000515150213
+000516150213             /* Clean up on aisle six */
+000517150213             IF         COND(&ADDSCHEMA *EQ '0') THEN(DO)
+000518150213                RMVLIBLE   LIB(&SCHEMA)
+000519150213                MONMSG     MSGID(CPF0000)
+000520150213             ENDDO
+000521150213
+000522150213             RMVLIBLE   LIB(&APPLIB)
+000523150213             MONMSG     MSGID(CPF0000)
+000524150213
+000525160420             GOTO       CMDLBL(EXITCLLE)
+000526160420
+000527160420
+000528160420/* Upper-casing API subroutine for CLLE programs */
+000529160420             SUBR       SUBR(UPPER)
+000530160420
+000531160420             CHGVAR     VAR(&FRCB_REQ) VALUE(1)
+000532160420             CHGVAR     VAR(&FRCB_CCSID) VALUE(0)
+000533160420             CHGVAR     VAR(&FRCB_LOWER) VALUE(0)
+000534160420             CHGVAR     VAR(&FRCB_RES) VALUE(X'00000000000000000000')
+000535160420 CONVERT:    CALL       PGM(QLGCNVCS) PARM(&FRCB &NAME &OUTPUT &LEN +
+000536160420                          &QUSEC)
+000537160420             /* SNDPGMMSG  MSGID(CPF9897) MSGF(QCPFMSG) MSGDTA('Name =' + */
+000538160420             /*              *BCAT &NAME) MSGTYPE(*COMP)                  */
+000539160420             /* SNDPGMMSG  MSGID(CPF9897) MSGF(QCPFMSG) MSGDTA('Upper=' + */
+000540160420             /*              *BCAT &OUTPUT) MSGTYPE(*COMP)                */
+000541160420             RTNSUBR    RTNVAL(0)
+000542160420
+000543160420 UPPER:      ENDSUBR
+000544160420
+000545160420
+000546160420
+000547160420 EXITCLLE:   ENDPGM
+000548150210
